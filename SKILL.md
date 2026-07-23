@@ -1,3 +1,17 @@
+---
+name: gpm-download
+display_name: GPM Precipitation Downloader
+version: 0.1.0
+author: rui.duobao
+license: MIT-0
+description: |
+  Download GPM IMERG (Global Precipitation Measurement) precipitation data
+  from NASA GES DISC. Provides 0.1° resolution global precipitation estimates.
+  No authentication required.
+runtime: python>=3.8
+tags: [gis, remote-sensing, precipitation, gpm, nasa, earth-observation, 下载]
+---
+
 # GPM Precipitation Downloader
 
 Download GPM IMERG (Global Precipitation Measurement) precipitation data from NASA GES DISC.
