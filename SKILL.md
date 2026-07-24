@@ -1,7 +1,7 @@
 ---
 name: gpm-download
 display_name: GPM Precipitation Downloader
-version: 0.1.0
+version: 0.1.2
 author: rui.duobao
 license: MIT-0
 description: |
