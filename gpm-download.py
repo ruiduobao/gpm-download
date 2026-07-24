@@ -735,19 +735,23 @@ def main(argv: Optional[List[str]] = None) -> int:
         "variables": args.variables,
     }
 
-    _emit_privacy_notice()
-
-    # Search
     if not _quiet():
-        print(f"[gpm-download] searching GES DISC for GPM_3IMERGDL files ...",
-              file=sys.stderr)
-        print(f"[gpm-download] date:      {args.start_date} → {args.end_date}",
-              file=sys.stderr)
-        print(f"[gpm-download] variables: {' '.join(args.variables)}",
-              file=sys.stderr)
-        if bbox:
-            print(f"[gpm-download] bbox:      [{bbox[0]}, {bbox[1]}, {bbox[2]}, {bbox[3]}]",
+        if args.offline:
+            print(f"[gpm-download] offline mode: using bundled catalog",
                   file=sys.stderr)
+        else:
+            print(f"[gpm-download] searching GES DISC for GPM_3IMERGDL files ...",
+                  file=sys.stderr)
+    if not args.offline:
+        _emit_privacy_notice()
+        if not _quiet():
+            print(f"[gpm-download] date:      {args.start_date} → {args.end_date}",
+                  file=sys.stderr)
+            print(f"[gpm-download] variables: {' '.join(args.variables)}",
+                  file=sys.stderr)
+            if bbox:
+                print(f"[gpm-download] bbox:      [{bbox[0]}, {bbox[1]}, {bbox[2]}, {bbox[3]}]",
+                      file=sys.stderr)
 
     try:
         if args.offline:
