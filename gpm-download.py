@@ -36,14 +36,12 @@ Usage
 
     python gpm-download.py \\
         --start-date 2024-01-01 \\
-        --end-date 2024-01-31 \\
-        --bbox 116.0 39.0 117.0 40.0
+        --end-date 2024-01-31
 
     # Search + download
     python gpm-download.py \\
         --start-date 2024-01-01 \\
         --end-date 2024-01-31 \\
-        --bbox 116.0 39.0 117.0 40.0 \\
         --variables precipitation precipitationCal \\
         --download \\
         --output-dir ./gpm_data
@@ -222,47 +220,6 @@ def enumerate_dates(start_date: str, end_date: str) -> List[str]:
     return dates
 
 
-def parse_bbox(bbox_str: Optional[List[str]]) -> Optional[Tuple[float, float, float, float]]:
-    """Parse and validate bounding box.
-
-    Parameters
-    ----------
-    bbox_str : list of str or None
-        Four floats: min_lon min_lat max_lon max_lat.
-
-    Returns
-    -------
-    tuple of 4 floats or None
-        Validated bounding box.
-
-    Raises
-    ------
-    ValueError
-        If bbox is invalid.
-    """
-    if bbox_str is None or len(bbox_str) == 0:
-        return None
-
-    if len(bbox_str) != 4:
-        raise ValueError("bbox must have exactly 4 values: min_lon min_lat max_lon max_lat")
-
-    try:
-        min_lon, min_lat, max_lon, max_lat = [float(x) for x in bbox_str]
-    except (ValueError, TypeError):
-        raise ValueError("bbox values must be numeric")
-
-    if not (-180 <= min_lon <= 180 and -180 <= max_lon <= 180):
-        raise ValueError("longitude must be between -180 and 180")
-    if not (-90 <= min_lat <= 90 and -90 <= max_lat <= 90):
-        raise ValueError("latitude must be between -90 and 90")
-    if min_lon >= max_lon:
-        raise ValueError("min_lon must be < max_lon")
-    if min_lat >= max_lat:
-        raise ValueError("min_lat must be < max_lat")
-
-    return (min_lon, min_lat, max_lon, max_lat)
-
-
 # ---------------------------------------------------------------------------
 # Search (list available files)
 # ---------------------------------------------------------------------------
@@ -377,9 +334,6 @@ def format_results_text(
     lines = []
     lines.append(f"[gpm-download] found {len(files)} file(s)")
     lines.append(f"[gpm-download] date range: {query_meta['start_date']} → {query_meta['end_date']}")
-    if query_meta.get("bbox"):
-        bbox = query_meta["bbox"]
-        lines.append(f"[gpm-download] bbox: [{bbox[0]}, {bbox[1]}, {bbox[2]}, {bbox[3]}]")
     lines.append(f"[gpm-download] variables: {', '.join(query_meta.get('variables', ['precipitation']))}")
     lines.append("")
 
@@ -628,13 +582,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="End date YYYY-MM-DD / 结束日期",
     )
     p.add_argument(
-        "--bbox",
-        nargs=4,
-        type=float,
-        metavar=("MIN_LON", "MIN_LAT", "MAX_LON", "MAX_LAT"),
-        help="Geographic extent in WGS84 / 地理范围 [minLon minLat maxLon maxLat]",
-    )
-    p.add_argument(
         "--variables",
         nargs="+",
         default=DEFAULT_VARIABLES,
@@ -719,19 +666,9 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(f"Available: {', '.join(AVAILABLE_VARIABLES.keys())}", file=sys.stderr)
             return 2
 
-    # Parse bbox (optional for GPM - data is global)
-    bbox = None
-    if args.bbox:
-        try:
-            bbox = parse_bbox(args.bbox)
-        except ValueError as e:
-            print(f"ERROR: invalid bbox: {e}", file=sys.stderr)
-            return 2
-
     query_meta = {
         "start_date": args.start_date,
         "end_date": args.end_date,
-        "bbox": list(bbox) if bbox else None,
         "variables": args.variables,
     }
 
@@ -749,9 +686,6 @@ def main(argv: Optional[List[str]] = None) -> int:
                   file=sys.stderr)
             print(f"[gpm-download] variables: {' '.join(args.variables)}",
                   file=sys.stderr)
-            if bbox:
-                print(f"[gpm-download] bbox:      [{bbox[0]}, {bbox[1]}, {bbox[2]}, {bbox[3]}]",
-                      file=sys.stderr)
 
     try:
         if args.offline:
