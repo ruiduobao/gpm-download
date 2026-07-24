@@ -190,6 +190,46 @@ def build_filename(date_str: str, variable: str = "precipitationCal") -> str:
     return f"gpm_3IMERGDL_{dt.strftime('%Y%m%d')}_{variable}.HDF5"
 
 
+def parse_bbox(bbox_list) -> Optional[Tuple[float, float, float, float]]:
+    """Parse and validate a bounding box.
+
+    Parameters
+    ----------
+    bbox_list : list of str or None
+        Bounding box as [west, south, east, north] or None/empty.
+
+    Returns
+    -------
+    tuple of (float, float, float, float) or None
+        (min_lon, min_lat, max_lon, max_lat) or None if input is None/empty.
+
+    Raises
+    ------
+    ValueError
+        If bbox is invalid (wrong count, out of range, reversed).
+    """
+    if bbox_list is None or len(bbox_list) == 0:
+        return None
+    if len(bbox_list) != 4:
+        raise ValueError(f"bbox must have exactly 4 values (west south east north), got {len(bbox_list)}")
+
+    try:
+        west, south, east, north = float(bbox_list[0]), float(bbox_list[1]), float(bbox_list[2]), float(bbox_list[3])
+    except (ValueError, TypeError) as e:
+        raise ValueError(f"bbox values must be numeric: {e}")
+
+    if not (-180 <= west <= 180 and -180 <= east <= 180):
+        raise ValueError(f"longitude must be between -180 and 180, got west={west}, east={east}")
+    if not (-90 <= south <= 90 and -90 <= north <= 90):
+        raise ValueError(f"latitude must be between -90 and 90, got south={south}, north={north}")
+    if west >= east:
+        raise ValueError(f"min_lon must be < max_lon, got west={west}, east={east}")
+    if south >= north:
+        raise ValueError(f"min_lat must be < max_lat, got south={south}, north={north}")
+
+    return (west, south, east, north)
+
+
 def enumerate_dates(start_date: str, end_date: str) -> List[str]:
     """Generate a list of date strings between start and end (inclusive).
 
@@ -629,6 +669,10 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Suppress progress + privacy notice (also GPM_DOWNLOAD_QUIET=1)",
     )
+    p.add_argument(
+        "--bbox", nargs=4, type=float, metavar=("W", "S", "E", "N"),
+        help="Bounding box filter (west south east north) / 边界框过滤",
+    )
     return p
 
 
@@ -666,10 +710,19 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(f"Available: {', '.join(AVAILABLE_VARIABLES.keys())}", file=sys.stderr)
             return 2
 
+    # Validate bbox if provided
+    if args.bbox:
+        try:
+            parse_bbox(args.bbox)
+        except ValueError as e:
+            print(f"ERROR: invalid bbox: {e}", file=sys.stderr)
+            return 2
+
     query_meta = {
         "start_date": args.start_date,
         "end_date": args.end_date,
         "variables": args.variables,
+        "bbox": args.bbox,
     }
 
     if not _quiet():
