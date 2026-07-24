@@ -1,4 +1,4 @@
-# GPM Precipitation Downloader · GPM 降水卫星下载器
+﻿# GPM Precipitation Downloader · GPM 降水卫星下载器
 
 > 下载 **GPM IMERG** 全球降水测量数据。
 > 数据来源为 NASA GES DISC（公开数据，无需账号）。
@@ -11,6 +11,36 @@
 GPM（全球降水测量）是 TRMM 的后续任务，提供全球 0.1° 分辨率的
 降水估计（IMERG）。水文、气候、农业研究必备。NASA GES DISC 提供
 免费 HTTPS 下载，但手动选择产品和日期范围比较繁琐。本 skill 自动化了整个流程。
+
+
+## Installation
+
+### Cross-platform (skills.sh · 50+ AI agents)
+
+```bash
+npx skills add ruiduobao/gpm-download -g
+```
+
+Works with: Claude Code, Cursor, Codex, GitHub Copilot, Windsurf, Gemini CLI, Cline, AMP, VS Code, Zed, OpenClaw, and more.
+
+### Claude Code (plugin marketplace)
+
+```bash
+/plugin marketplace add ruiduobao/claude-plugins
+/plugin install gpm-download@ruiduobao-geo-skills
+```
+
+### ClawHub (OpenClaw)
+
+```bash
+clawhub install ruiduobao/gpm-download
+```
+
+### Manual
+
+```bash
+git clone https://github.com/ruiduobao/gpm-download.git
+```
 
 ## Quickstart / 快速开始
 
