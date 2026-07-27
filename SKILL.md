@@ -1,13 +1,6 @@
 ---
-description: 'Download GPM IMERG (Global Precipitation Measurement) precipitation
-  data
-
-  from NASA GES DISC. Provides 0.1° resolution global precipitation estimates.
-
-  No authentication required.
-
-  '
 name: gpm-download
+description: 'Download GPM IMERG (Global Precipitation Measurement) precipitation description: 'Download GPM IMERG (Global Precipitation Measurement) precipitation data  from NASA GES DISC. Provides 0.1° resolution global precipitation estimates.  No authentication required.  '
 ---
 
 # GPM Precipitation Downloader
