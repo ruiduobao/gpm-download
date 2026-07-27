@@ -64,6 +64,15 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
+# Local helper: --place resolution (vendored copy of _place_resolver.py)
+try:
+    from _place import resolve_place as _resolve_place
+except ImportError:  # pragma: no cover - allow running without helper
+    def _resolve_place(*_a, **_kw):  # type: ignore
+        raise RuntimeError(
+            "place resolution helper (_place.py) not available in this folder"
+        )
+
 
 # ---------------------------------------------------------------------------
 # GES DISC endpoints
@@ -673,6 +682,41 @@ def build_parser() -> argparse.ArgumentParser:
         "--bbox", nargs=4, type=float, metavar=("W", "S", "E", "N"),
         help="Bounding box filter (west south east north) / 边界框过滤",
     )
+    p.add_argument(
+        "--place",
+        help="Place name (Chinese or English). Auto-resolved to bbox via Open-Meteo + Nominatim. "
+             "Mutually exclusive with --bbox / 行政地名 (自动解析为 bbox)",
+    )
+    p.add_argument(
+        "--place-buffer-deg",
+        type=float,
+        default=0.5,
+        help="Buffer (degrees) added around the resolved point when --place is used "
+             "(default 0.5; ignored if --bbox also given) / 围绕地名的 bbox 缓冲（度）",
+    )
+    p.add_argument(
+        "--no-nominatim",
+        action="store_true",
+        help="Skip Nominatim lookup in --place resolution / --place 解析时跳过 Nominatim",
+    )
+    p.add_argument(
+        "--qa",
+        metavar="PATH",
+        help="Write a JSON QA summary (search results, picked files, totals) "
+             "to PATH. Implies --download. / 写出 QA 摘要 JSON",
+    )
+    p.add_argument(
+        "--export-csv",
+        metavar="PATH",
+        help="After download, compute per-day zonal mean (mm/hr) over the bbox "
+             "and write to CSV. Requires h5py/numpy; silently skipped if missing. / "
+             "写出 bbox 内日均降水 CSV",
+    )
+    p.add_argument(
+        "--export-summary",
+        action="store_true",
+        help="Print a one-line summary per downloaded file (variable, byte size).",
+    )
     return p
 
 
@@ -717,6 +761,48 @@ def main(argv: Optional[List[str]] = None) -> int:
         except ValueError as e:
             print(f"ERROR: invalid bbox: {e}", file=sys.stderr)
             return 2
+
+    # Resolve --place to bbox if given
+    place_info: Optional[Dict[str, Any]] = None
+    if args.place:
+        if args.bbox:
+            print(
+                "ERROR: --place and --bbox are mutually exclusive; pick one.",
+                file=sys.stderr,
+            )
+            return 2
+        try:
+            place_info = _resolve_place(
+                args.place,
+                allow_nominatim=not args.no_nominatim,
+            )
+        except Exception as e:
+            print(f"ERROR: --place resolution failed: {e}", file=sys.stderr)
+            return 2
+        # Build a bbox from the place centroid with the requested buffer
+        w = place_info["lon"] - args.place_buffer_deg
+        e = place_info["lon"] + args.place_buffer_deg
+        s = place_info["lat"] - args.place_buffer_deg
+        n = place_info["lat"] + args.place_buffer_deg
+        args.bbox = [w, s, e, n]
+        if not _quiet():
+            print(
+                f"[gpm-download] place: {place_info.get('display_name') or args.place}",
+                file=sys.stderr,
+            )
+            print(
+                f"[gpm-download] resolved to bbox {args.bbox} "
+                f"(buffer {args.place_buffer_deg}°)",
+                file=sys.stderr,
+            )
+            print(
+                f"[gpm-download] geocoder source: {place_info.get('source')}",
+                file=sys.stderr,
+            )
+
+    # --qa implies --download
+    if args.qa:
+        args.download = True
 
     query_meta = {
         "start_date": args.start_date,
@@ -796,6 +882,92 @@ def main(argv: Optional[List[str]] = None) -> int:
               f"downloaded {_human_bytes(result['total_bytes'])} across "
               f"{len(result['files'])} file(s)",
               file=sys.stderr)
+
+    # Optional summary printout
+    if args.export_summary:
+        for f in result.get("files", []):
+            sz = os.path.getsize(f["path"]) if os.path.exists(f["path"]) else 0
+            print(
+                f"  {f['date']}  {f['variable']:<16s}  "
+                f"{_human_bytes(sz):>10s}  {f.get('message', '')}",
+                file=sys.stderr,
+            )
+
+    # Optional CSV export (zonal mean per day)
+    if args.export_csv:
+        try:
+            from _export_csv import export_zonal_csv
+            export_zonal_csv(
+                files=result.get("files", []),
+                bbox=args.bbox,
+                output_csv=args.export_csv,
+            )
+            if not _quiet():
+                print(
+                    f"[gpm-download] wrote zonal-mean CSV to {args.export_csv}",
+                    file=sys.stderr,
+                )
+        except ImportError:
+            print(
+                "ERROR: --export-csv requires h5py + numpy. "
+                "Install with: pip install h5py numpy",
+                file=sys.stderr,
+            )
+            return 3
+        except Exception as e:
+            print(f"ERROR: --export-csv failed: {e}", file=sys.stderr)
+            return 3
+
+    # Optional QA summary
+    if args.qa:
+        try:
+            qa = {
+                "skill": "gpm-download",
+                "version": "0.2.0",
+                "query": {
+                    "start_date": args.start_date,
+                    "end_date": args.end_date,
+                    "variables": args.variables,
+                    "bbox": args.bbox,
+                    "place": (
+                        {
+                            "query": place_info["query"] if place_info else None,
+                            "display_name": place_info.get("display_name") if place_info else None,
+                            "source": place_info.get("source") if place_info else None,
+                            "buffer_deg": args.place_buffer_deg if place_info else None,
+                        }
+                        if place_info
+                        else None
+                    ),
+                },
+                "source": "NASA GES DISC (GPM_3IMERGDL.07)",
+                "searched": len(files),
+                "downloaded": sum(1 for f in result.get("files", []) if f.get("ok")),
+                "failed": sum(1 for f in result.get("files", []) if not f.get("ok")),
+                "total_bytes": result.get("total_bytes", 0),
+                "elapsed_seconds": round(elapsed, 1),
+                "files": [
+                    {
+                        "date": f["date"],
+                        "variable": f["variable"],
+                        "path": f["path"],
+                        "ok": f.get("ok"),
+                        "size_bytes": (
+                            os.path.getsize(f["path"]) if os.path.exists(f["path"]) else 0
+                        ),
+                        "message": f.get("message", ""),
+                    }
+                    for f in result.get("files", [])
+                ],
+                "exported_csv": args.export_csv,
+            }
+            with open(args.qa, "w", encoding="utf-8") as f:
+                json.dump(qa, f, ensure_ascii=False, indent=2)
+            if not _quiet():
+                print(f"[gpm-download] wrote QA summary to {args.qa}", file=sys.stderr)
+        except Exception as e:
+            print(f"ERROR: --qa write failed: {e}", file=sys.stderr)
+            return 3
 
     return 0 if result["ok"] else 1
 
